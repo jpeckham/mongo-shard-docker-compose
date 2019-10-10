@@ -1,9 +1,10 @@
-version: '2'
+version: '3.1'
 services:
 
-  ## Config Servers
+  ## Config Servers replica set (CSRS) https://docs.mongodb.com/manual/core/sharded-cluster-config-servers/
   config01:
     image: mongo
+    restart: always
     command: mongod --port 27017 --configsvr --replSet configserver --noprealloc --smallfiles --oplogSize 16
     volumes:
       - ./scripts:/scripts
@@ -12,47 +13,74 @@ services:
     command: mongod --port 27017 --configsvr --replSet configserver --noprealloc --smallfiles --oplogSize 16
     volumes:
       - ./scripts:/scripts
+    depends_on:
+      - config01
+
   config03:
     image: mongo
     command: mongod --port 27017 --configsvr --replSet configserver --noprealloc --smallfiles --oplogSize 16
     volumes:
       - ./scripts:/scripts
-
-  ## Shards
+    depends_on:
+      - config01
+# shards  - https://docs.mongodb.com/manual/core/sharded-cluster-shards/
+# shard 1 replica set of 3 nodes a,b,c
   shard01a:
     image: mongo
+    restart: always
     command: mongod --port 27018 --shardsvr --replSet shard01 --noprealloc --smallfiles --oplogSize 16
     volumes:
       - ./scripts:/scripts
+    depends_on:
+      - config01
   shard01b:
     image: mongo
+    restart: always
     command: mongod --port 27018 --shardsvr --replSet shard01 --noprealloc --smallfiles --oplogSize 16
     volumes:
       - ./scripts:/scripts
+    depends_on:
+      - shard01a
+  shard01c:
+    image: mongo
+    restart: always
+    command: mongod --port 27018 --shardsvr --replSet shard01 --noprealloc --smallfiles --oplogSize 16
+    volumes:
+      - ./scripts:/scripts
+    depends_on:
+      - shard01a
+# shard 2 replica set of 3 nodes a,b,c
   shard02a:
     image: mongo
+    restart: always
     command: mongod --port 27019 --shardsvr --replSet shard02 --noprealloc --smallfiles --oplogSize 16
     volumes:
       - ./scripts:/scripts
+    depends_on:
+      - config01
+
   shard02b:
     image: mongo
+    restart: always
     command: mongod --port 27019 --shardsvr --replSet shard02 --noprealloc --smallfiles --oplogSize 16
     volumes:
       - ./scripts:/scripts
-  shard03a:
-    image: mongo
-    command: mongod --port 27020 --shardsvr --replSet shard03 --noprealloc --smallfiles --oplogSize 16
-    volumes:
-      - ./scripts:/scripts
-  shard03b:
-    image: mongo
-    command: mongod --port 27020 --shardsvr --replSet shard03 --noprealloc --smallfiles --oplogSize 16
-    volumes:
-      - ./scripts:/scripts
+    depends_on:
+      - shard02a
 
-  ## Router
+  shard02c:
+    image: mongo
+    restart: always
+    command: mongod --port 27019 --shardsvr --replSet shard02 --noprealloc --smallfiles --oplogSize 16
+    volumes:
+      - ./scripts:/scripts
+    depends_on:
+      - shard02a
+
+  ## Router aka 'mongos' (which is a horrible name; let's be honest) https://docs.mongodb.com/manual/core/sharded-cluster-query-router/
   router:
     image: mongo
+    restart: always
     command: mongos --port 27017 --configdb configserver/config01:27017,config02:27017,config03:27017 --bind_ip_all
     ports:
       - "27017:27017"
@@ -66,5 +94,14 @@ services:
       - shard01b
       - shard02a
       - shard02b
-      - shard03a
-      - shard03b
+
+#mongo express is a nice little web based utility to edit/visualize mongo for the CLI impaired
+  mongo-express:
+    image: mongo-express
+    restart: always
+    environment:
+      - ME_CONFIG_MONGODB_SERVER=router
+    ports:
+      - 8081:8081
+    depends_on:
+      - router
