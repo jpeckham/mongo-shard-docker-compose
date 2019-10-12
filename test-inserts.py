@@ -9,7 +9,7 @@ mycol = mydb["customers"]
 fake = Faker()
 
 count = 0
-total_records_to_write = 20000
+total_records_to_write = 5000
 total_run_time = 0
 begin_time = time.time()
 number_records = 0
